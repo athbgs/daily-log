@@ -1,0 +1,61 @@
+name: Daily Log
+
+# Jalan otomatis tiap hari + bisa di-trigger manual dari tab Actions
+on:
+  schedule:
+    # 23:00 UTC = 06:00 WIB (pagi). Ubah kalau mau jam lain.
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+# Wajib: kasih izin workflow buat push commit
+permissions:
+  contents: write
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Append entri journal
+        run: |
+          # Pakai timezone WIB biar tanggalnya bener
+          export TZ="Asia/Jakarta"
+          DATE=$(date '+%Y-%m-%d')
+          TIME=$(date '+%H:%M')
+          MONTH_FILE="journal/$(date '+%Y-%m').md"
+
+          mkdir -p journal
+
+          # Bikin header file bulanan kalau belum ada
+          if [ ! -f "$MONTH_FILE" ]; then
+            echo "# Journal $(date '+%B %Y')" > "$MONTH_FILE"
+            echo "" >> "$MONTH_FILE"
+          fi
+
+          # Skip kalau tanggal hari ini udah ada (biar ga dobel)
+          if grep -q "## $DATE" "$MONTH_FILE"; then
+            echo "Entri $DATE udah ada, skip."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          {
+            echo "## $DATE"
+            echo ""
+            echo "- [ ] Apa yang gw pelajarin/kerjain hari ini:"
+            echo "- [ ] 1 hal yang mau gw improve besok:"
+            echo ""
+          } >> "$MONTH_FILE"
+
+          echo "Ditambahin entri buat $DATE"
+
+      - name: Commit & push
+        if: env.SKIP != '1'
+        run: |
+          git config user.name "athaillahbagas17"
+          git config user.email "athaillahbagas17@gmail.com"
+          git add journal/
+          git commit -m "log: entri harian $(TZ='Asia/Jakarta' date '+%Y-%m-%d')"
+          git push
